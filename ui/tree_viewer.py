@@ -35,9 +35,9 @@ from ai.minimax import MinimaxNode
 C_BG          = (12,  18,  12)
 C_PANEL       = (18,  28,  18)
 C_BORDER      = (40,  65,  40)
-C_TEXT        = (220, 220, 200)
-C_TEXT_DIM    = (120, 130, 110)
-C_ACCENT      = (255, 190,  50)   # Dorado
+C_TEXT        = (240, 240, 240)   # Más claro
+C_TEXT_DIM    = (160, 170, 160)   # Más claro
+C_ACCENT      = (255, 230,  0)    # Amarillo más brillante y saturado
 
 # Nodos
 C_ROOT        = (70,  80,  70)    # Raíz
@@ -198,6 +198,10 @@ class TreeViewer:
     #  Layout                                                              #
     # ------------------------------------------------------------------ #
 
+    @property
+    def type_label(self) -> str:
+        return "MAX [UP]" if self.is_max else "MIN [DOWN]"
+
     def _compute_layout(self) -> None:
         if self.root is None:
             return
@@ -312,12 +316,47 @@ class TreeViewer:
         # Área de dibujo con clip para no solapar el header/legend
         clip = pygame.Rect(0, 65, W, H - 170)
         self.screen.set_clip(clip)
+        self._draw_level_indicators(W)
         self._draw_edges(self.root)
         self._draw_nodes(self.root)
         self.screen.set_clip(None)
 
         if self._hovered is not None:
             self._draw_tooltip(self._hovered, W, H)
+
+    def _draw_level_indicators(self, W: int) -> None:
+        """Dibuja franjas de fondo y etiquetas para cada nivel de profundidad."""
+        if self.root is None:
+            return
+        
+        depth = self._tree_depth(self.root) + 1
+        for d in range(depth):
+            # Calcular banda en coordenadas de pantalla
+            _, y0 = self._to_screen(0, d * (NODE_H + V_GAP) - V_GAP // 2)
+            _, y1 = self._to_screen(0, d * (NODE_H + V_GAP) + NODE_H + V_GAP // 2)
+            
+            # Solo dibujar si es visible en el clip (65 a H-170)
+            if y1 < 65 or y0 > self.screen.get_height() - 170:
+                continue
+            
+            # Franja de fondo
+            alpha = 15 if d % 2 == 0 else 5
+            band_surf = pygame.Surface((W, y1 - y0), pygame.SRCALPHA)
+            band_surf.fill((255, 255, 255, alpha))
+            self.screen.blit(band_surf, (0, y0))
+            
+            # Línea divisoria
+            pygame.draw.line(self.screen, (40, 60, 40), (0, y0), (W, y0), 1)
+            
+            # Etiqueta de capa
+            is_max = (d % 2 == 0) # Raiz es depth 0, es MAX
+            lbl_txt = f"NIVEL {d}: {'CAPA MAX (Agente)' if is_max else 'CAPA MIN (Rival)'}"
+            lbl_col = C_MAX_BORDER if is_max else C_MIN_BORDER
+            
+            sur = self.font_small.render(lbl_txt, True, lbl_col)
+            # Fondo para el texto
+            pygame.draw.rect(self.screen, C_BG, (5, y0 + 5, sur.get_width() + 10, sur.get_height() + 4), border_radius=4)
+            self.screen.blit(sur, (10, y0 + 7))
 
     # ── Header ─────────────────────────────────────────────────────────── #
 
@@ -326,7 +365,7 @@ class TreeViewer:
         pygame.draw.line(self.screen, C_BORDER, (0, 62), (W, 62), 1)
 
         title = self.font_title.render(
-            f"🌲  Árbol Minimax α-β  —  {self.agent_name}", True, C_ACCENT
+            f"[T]  ARBOL MINIMAX  -  {self.agent_name}", True, C_ACCENT
         )
         self.screen.blit(title, (16, 10))
 
@@ -334,15 +373,15 @@ class TreeViewer:
             total  = len(self._all_nodes)
             pruned = sum(1 for n in self._all_nodes if n.was_pruned)
             depth  = self._tree_depth(self.root)
-            stats  = (f"Nodos explorados: {total - pruned}   |   "
-                      f"Podados α-β: {pruned}   |   "
-                      f"Profundidad: {depth}   |   "
-                      f"Raíz score: {self.root.score_str}")
+            stats  = (f"Exp: {total - pruned}   |   "
+                      f"Poda Alpha-Beta: {pruned}   |   "
+                      f"Depth: {depth}   |   "
+                      f"Raiz: {self.root.score_str}")
             st = self.font_small.render(stats, True, C_TEXT_DIM)
             self.screen.blit(st, (16, 40))
 
         hint = self.font_small.render(
-            "Rueda: zoom  |  Arrastrar (clic der.): pan  |  F: encuadrar  |  ESC: volver",
+            "Wheel: Zoom  |  Drag (R-Click): Pan  |  F: Fit  |  ESC: Back",
             True, C_TEXT_DIM,
         )
         self.screen.blit(hint, hint.get_rect(right=W - 16, y=42))
@@ -356,11 +395,11 @@ class TreeViewer:
         pygame.draw.line(self.screen, C_BORDER, (0, ly), (W, ly), 1)
 
         items = [
-            (C_MAX_BODY,   C_MAX_BORDER,   "MAX ▲  —  Capa del agente (maximiza)"),
-            (C_MIN_BODY,   C_MIN_BORDER,   "MIN ▼  —  Capa del oponente (minimiza)"),
-            (C_WIN_BODY,   C_WIN_BRD,      "WIN  —  Estado ganador"),
-            (C_LOSS_BODY,  C_LOSS_BRD,     "LOSS  —  Estado perdedor"),
-            (C_PRUNED_BODY,C_PRUNED_BRD,   "✂  —  Rama podada por α-β (no explorada)"),
+            (C_MAX_BODY,   C_MAX_BORDER,   "MAX [^] - Capa Agente (Maximiza)"),
+            (C_MIN_BODY,   C_MIN_BORDER,   "MIN [v] - Capa Rival (Minimiza)"),
+            (C_WIN_BODY,   C_WIN_BRD,      "WIN - Estado Ganador"),
+            (C_LOSS_BODY,  C_LOSS_BRD,     "LOSS - Estado Perdedor"),
+            (C_PRUNED_BODY,C_PRUNED_BRD,   "[X] - Rama podada Alpha-Beta"),
         ]
         x = 16
         y = ly + 10
@@ -405,8 +444,8 @@ class TreeViewer:
 
     def _draw_buttons(self, W: int, H: int, mp: Tuple[int, int]) -> None:
         for rect, label in [
-            (self._back_btn_rect(W, H), "← Volver"),
-            (self._fit_btn_rect(W, H),  "⊡  Ajustar"),
+            (self._back_btn_rect(W, H), "< Volver"),
+            (self._fit_btn_rect(W, H),  "[F] Fit"),
         ]:
             hover = rect.collidepoint(mp)
             col   = (80, 120, 80) if hover else (40, 65, 40)
@@ -479,11 +518,23 @@ class TreeViewer:
             border = C_MIN_BORDER
 
         # ── Dibuja cuerpo ──────────────────────────────────────────────── #
+        # Sombra sutil
+        shadow_rect = rect.move(2, 2)
+        pygame.draw.rect(self.screen, (5, 10, 5, 160), shadow_rect, border_radius=6)
+        
         pygame.draw.rect(self.screen, body,   rect, border_radius=6)
 
-        # Borde elegido → dorado grueso
-        bw = max(1, int(3 * self.zoom)) if node.is_chosen else max(1, int(self.zoom))
-        bc = C_CHOSEN_GLOW if node.is_chosen else border
+        # Borde elegido → dorado grueso con glow
+        if node.is_chosen:
+            # Glow exterior
+            for i in range(1, 4):
+                pygame.draw.rect(self.screen, (255, 215, 0, 30 // i), rect.inflate(i*2, i*2), border_radius=7)
+            bw = max(2, int(3 * self.zoom))
+            bc = C_CHOSEN_GLOW
+        else:
+            bw = max(1, int(self.zoom))
+            bc = border
+            
         pygame.draw.rect(self.screen, bc, rect, bw, border_radius=6)
 
         # ── Texto (solo si zoom suficiente) ───────────────────────────── #
@@ -510,17 +561,22 @@ class TreeViewer:
             inner_y += line_h
 
         # Etiqueta principal (ficha/side o RAÍZ)
-        lbl_col = C_ACCENT if node.is_chosen else C_TEXT
+        lbl_col = (255, 255, 255) if node.is_chosen else C_TEXT
         txt(node.label, lbl_col, bold=True)
 
         # Puntuación
         sc_col = (
-            (80, 220, 100)  if node.score >= 999 else
-            (220,  80,  80) if node.score <= -999 else
-            C_ACCENT        if node.is_chosen else
+            (100, 255, 120) if node.score >= 999 else
+            (255, 100, 100) if node.score <= -999 else
+            (255, 255, 255) if node.is_chosen else
             C_TEXT
         )
-        txt(node.score_str, sc_col, bold=True)
+        txt(f"Val: {node.score_str}", sc_col, bold=True)
+
+        # h(n) resumido (si existe)
+        h_val = node.eval_details.get("h(n) Pips (Δ)")
+        if h_val is not None:
+            txt(f"h(n): {h_val:+.1f}", C_TEXT_DIM)
 
         # Tipo MAX/MIN
         type_col = C_MAX_BORDER if node.is_max else C_MIN_BORDER
@@ -529,7 +585,7 @@ class TreeViewer:
 
         # Símbolo de podado
         if node.was_pruned:
-            prune_txt = self.font_node.render("✂ PODADO", True, (150, 80, 80))
+            prune_txt = self.font_node.render("[X] PODA", True, (150, 80, 80))
             self.screen.blit(prune_txt, (inner_x, inner_y))
 
         # Hover glow

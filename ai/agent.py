@@ -87,7 +87,20 @@ class DominoAgent:
             return moves[0], 0.0
 
         algorithm_used = "A*" if self.strategy == Strategy.ASTAR else "Minimax"
-        move = self._execute(state, algorithm_used)
+        
+        # Requirement 2.1: Determinization (Sampling)
+        # Create an imaginary state for the AI to base its search on.
+        sampled_state = state.determinize(self.player_id)
+        
+        # Diagnostic check for duplicate tiles (Requested by user)
+        board_tiles = {t.canonical().as_point() for t in state.board.tiles}
+        opp_hand = {t.canonical().as_point() for t in sampled_state.hands[1-self.player_id]}
+        boneyard = {t.canonical().as_point() for t in sampled_state.boneyard}
+        duplicates = (opp_hand | boneyard) & board_tiles
+        if duplicates:
+            print(f"DEBUG WARNING: Sampling consistency error! Found tiles {duplicates} in hands/boneyard that are already on the board.")
+        
+        move = self._execute(sampled_state, algorithm_used)
         
         # Get score from the specific algorithm
         score = 0.0
@@ -95,7 +108,7 @@ class DominoAgent:
             score = self._minimax.last_tree.score
 
         self.move_count += 1
-        self._record(state, algorithm_used)
+        self._record(state, algorithm_used) # Record original state metrics
 
         return (move or moves[0]), score
 

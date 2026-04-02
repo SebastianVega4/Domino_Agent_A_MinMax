@@ -50,18 +50,18 @@ class MinimaxNode:
     _x, _y       : Posición en píxeles del nodo en el lienzo virtual.
     _subtree_w   : Anchura del subárbol (usada para el posicionado).
     """
-    move:        Optional[Tuple]   = None
-    score:       float             = 0.0
-    depth:       int               = 0
-    is_max:      bool              = True
-    is_terminal: bool              = False
-    is_chosen:   bool              = False
-    was_pruned:  bool              = False
-    alpha_in:    float             = field(default_factory=lambda: -math.inf)
-    beta_in:     float             = field(default_factory=lambda:  math.inf)
-    label:       str               = "RAÍZ"
-    children:    List[MinimaxNode] = field(default_factory=list)
-    eval_details: Dict[str, float] = field(default_factory=dict)
+    move:        Optional[Tuple[Tile, str]] = None
+    score:       float                     = 0.0
+    depth:       int                       = 0
+    is_max:      bool                      = True
+    is_terminal: bool                      = False
+    is_chosen:   bool                      = False
+    was_pruned:  bool                      = False
+    alpha_in:    float                     = field(default_factory=lambda: -math.inf)
+    beta_in:     float                     = field(default_factory=lambda:  math.inf)
+    label:       str                       = "RAÍZ"
+    children:    List[MinimaxNode]          = field(default_factory=list)
+    eval_details: Dict[str, float]          = field(default_factory=dict)
 
     # Layout (escritos por TreeViewer.compute_layout)
     _x:         float = field(default=0.0, repr=False)
@@ -417,10 +417,10 @@ class MinimaxAgent:
         total  = c_val + c_play + c_dist + c_size
 
         details = {
-            "Pips (Δ)": c_val,
-            "Versatilidad": c_play,
-            "Distancia": c_dist,
-            "Tamaño mano": c_size
+            "h(n) Pips (Δ)": c_val,
+            "Conectividad": c_play,
+            "M. Dist (Ends)": c_dist,
+            "Draft Size": c_size
         }
 
         return total, details

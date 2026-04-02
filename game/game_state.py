@@ -5,6 +5,7 @@ Designed for use in A* and Minimax search trees: cloning is cheap
 and all transition methods return new states.
 """
 from __future__ import annotations
+import random
 from typing import List, Tuple, Optional
 
 from game.tile import Tile
@@ -150,6 +151,46 @@ class GameState:
             frozenset(t.canonical().as_point() for t in self.hands[1]),
             self.current_player,
         )
+
+    # ------------------------------------------------------------------ #
+    #  Imperfect Information (Determinization / Sampling)                  #
+    # ------------------------------------------------------------------ #
+
+    def determinize(self, observer_id: int) -> GameState:
+        """
+        Create a 'sampled' state for the observer.
+        Ensures that tiles already on the board or in the observer's hand
+        are NEVER placed in the opponent's hand or boneyard.
+        """
+        ns = self.clone()
+        opp_id = 1 - observer_id
+
+        # 1. Start with the full set of 28 tiles
+        all_tiles = {
+            (i, j) for i in range(7) for j in range(i, 7)
+        }
+
+        # 2. Identify known tiles (Board + Observer's Hand)
+        known = {t.canonical().as_point() for t in self.hands[observer_id]}
+        for t in self.board.tiles:
+            known.add(t.canonical().as_point())
+
+        # 3. Unknown tiles = All - Known
+        unknown_pts = list(all_tiles - known)
+        random.shuffle(unknown_pts)
+        unknown_tiles = [Tile(*p) for p in unknown_pts]
+
+        # 4. Redistribute according to original counts
+        opp_count = len(self.hands[opp_id])
+        
+        # Safety check: if counts don't match, fall back to current hand (should not happen)
+        if len(unknown_tiles) < opp_count:
+            return ns
+            
+        ns.hands[opp_id] = unknown_tiles[:opp_count]
+        ns.boneyard      = unknown_tiles[opp_count:]
+
+        return ns
 
     # ------------------------------------------------------------------ #
     #  Cloning                                                             #

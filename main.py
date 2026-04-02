@@ -37,7 +37,7 @@ def _build_agents(config: dict) -> dict:
 
 def main() -> None:
     pygame.init()
-    pygame.display.set_caption("Dominó IA  |  A* + Minimax  |  Clic en LOG para historial")
+    pygame.display.set_caption("Domino IA | A* + Minimax")
     screen = pygame.display.set_mode((1200, 750), pygame.RESIZABLE)
     pygame.display.set_icon(_make_icon())
 

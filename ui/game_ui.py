@@ -49,7 +49,7 @@ C_SELECTED    = (255, 215,   0)
 C_HINT        = (100, 230, 110)
 C_TEXT        = (228, 228, 210)
 C_TEXT_DIM    = (130, 140, 120)
-C_ACCENT      = (255, 185,  45)
+C_ACCENT      = (255, 230,  0)
 C_PANEL       = (16,  26,  16)
 C_PANEL_BRD   = (50,  78,  50)
 C_BTN         = (38,  72,  38)
@@ -252,7 +252,7 @@ class MenuScreen:
             bhov = btn.collidepoint(mp)
             pygame.draw.rect(self.screen, C_BTN_HOV if bhov else C_BTN, btn, border_radius=10)
             pygame.draw.rect(self.screen, C_ACCENT, btn, 2, border_radius=10)
-            bt = self.fM.render(">>>  Iniciar partida", True, C_ACCENT)
+            bt = self.fM.render(">>>  Iniciar", True, C_ACCENT)
             self.screen.blit(bt, bt.get_rect(center=btn.center))
 
             q = self.fS.render("ESC  para salir", True, C_TEXT_DIM)
@@ -352,6 +352,11 @@ class GameScreen:
             body=C_TREE_BTN, border=C_TREE_BTN_B, text_col=(180, 210, 255),
         )
         self.viewer = TreeViewer(self.screen)
+        
+        # New: Flow controls
+        self.auto_mode = True
+        self._btn_next = Button(pygame.Rect(0, 0, 145, 36), "SIGUIENTE >>", self.fS, body=(100, 100, 50))
+        self._btn_auto = Button(pygame.Rect(0, 0, 145, 36), "MODO: AUTO", self.fS)
 
         self._set_status()
 
@@ -396,6 +401,11 @@ class GameScreen:
                     return "menu"
                 if self._btn_tree.clicked(event):
                     self._open_tree(self.viewer)
+                if self._btn_auto.clicked(event):
+                    self.auto_mode = not self.auto_mode
+                    self._btn_auto.label = "MODO: AUTO" if self.auto_mode else "MODO: MANUAL"
+                if not self.auto_mode and self._btn_next.clicked(event):
+                    self._trigger_ai_move()
 
                 self._handle_human(event)
 
@@ -436,14 +446,20 @@ class GameScreen:
             elif isinstance(mv, tuple) and len(mv) == 2:
                 tile, side = mv
                 self._apply_move(tile, side, ai=True, score=score)
-            else:
-                # Caso borde de un solo objeto o error de retorno
-                pass
             return
 
+        # Only auto-trigger if in auto mode
+        if self.auto_mode:
+            self._trigger_ai_move()
+
+    def _trigger_ai_move(self) -> None:
+        cp = self.state.current_player
+        if cp not in self.agents or self._ai_thinking:
+            return
+        
         self._ai_thinking = True
         agent = self.agents[cp]
-        delay = self.ai_delay
+        delay = self.ai_delay if self.auto_mode else 0.1
 
         def think():
             time.sleep(delay)
@@ -589,13 +605,13 @@ class GameScreen:
         if self.state.is_terminal():
             w = self.state.winner()
             if w is None:
-                self.status_msg = "EMPATE — Ambos bloqueados. Menor pip gana."
+                self.status_msg = "EMPATE - Ambos bloqueados."
             elif self.mode == "human_vs_ai" and w not in self.agents:
-                self.status_msg = "🏆 ¡GANASTE!  Presiona ESC para volver al menú."
+                self.status_msg = "!!! GANASTE !!! (ESC para salir)"
             elif self.mode == "human_vs_ai":
-                self.status_msg = "💻 IA GANA   Presiona ESC para volver al menú."
+                self.status_msg = "IA GANA (ESC para salir)"
             else:
-                self.status_msg = f"🏆 GANA JUGADOR {w + 1}  |  Presiona ESC."
+                self.status_msg = f"GANADOR: JUGADOR {w + 1}"
         elif self._ai_thinking:
             dots = "." * self._think_dots
             self.status_msg = f"IA pensando{dots}"
@@ -615,11 +631,15 @@ class GameScreen:
 
     def _update_btn_positions(self, W: int, H: int) -> None:
         board_y = HEADER_H + HAND_H + 8
-        # Botón árbol: debajo del tablero, centrado en el área de juego
-        center_x = (W - PANEL_W) // 2
-        self._btn_tree.rect = pygame.Rect(center_x - 79, board_y + BOARD_H + 8, 158, 36)
-        # Botón draw: solo visible cuando toca
-        self._btn_draw.rect = pygame.Rect(center_x + 90, board_y + BOARD_H + 8, 145, 36)
+        lane_w = W - PANEL_W
+        
+        # Botones en fila debajo del tablero
+        self._btn_tree.rect = pygame.Rect(20, board_y + BOARD_H + 8, 150, 36)
+        self._btn_auto.rect = pygame.Rect(180, board_y + BOARD_H + 8, 150, 36)
+        self._btn_next.rect = pygame.Rect(340, board_y + BOARD_H + 8, 150, 36)
+        
+        # Botón draw/pass a la derecha de la fila
+        self._btn_draw.rect = pygame.Rect(lane_w - 165, board_y + BOARD_H + 8, 145, 36)
 
     # ------------------------------------------------------------------ #
     #  Dibujo                                                              #
@@ -662,8 +682,8 @@ class GameScreen:
             )
             active = (self.state.current_player == pid)
             c      = col if active else C_TEXT_DIM
-            marker = "▶ " if active else "  "
-            txt = self.fS.render(f"{marker}{lbl_base}: {lbl}  |  fichas: {len(self.state.hands[pid])}  pip: {self.state.hand_value(pid)}", True, c)
+            marker = "> " if active else "  "
+            txt = self.fS.render(f"{marker}{lbl_base}: {lbl}  |  fichas: {len(self.state.hands[pid])}", True, c)
             self.screen.blit(txt, (130, ypos + 10))
 
         # Boneyard
@@ -936,13 +956,26 @@ class GameScreen:
     # ── Botones ────────────────────────────────────────────────────────── #
 
     def _draw_buttons(self, W: int, H: int, mp: Tuple[int, int]) -> None:
-        self._btn_menu.update(mp); self._btn_menu.draw(self.screen)
-        self._btn_tree.update(mp); self._btn_tree.draw(self.screen)
+        self._btn_menu.update(mp)
+        self._btn_menu.draw(self.screen)
+        
+        self._btn_tree.update(mp)
+        self._btn_tree.draw(self.screen)
+        
+        self._btn_auto.update(mp)
+        self._btn_auto.draw(self.screen)
+        
+        # Siguiente solo visible en manual y cuando es turno de IA
+        if not self.auto_mode and self.state.current_player in self.agents:
+            self._btn_next.update(mp)
+            self._btn_next.draw(self.screen)
 
-        cp = self.state.current_player
-        if (cp not in self.agents and not self.state.get_valid_moves()
-                and not self.state.is_terminal()):
-            self._btn_draw.update(mp); self._btn_draw.draw(self.screen)
+        # Robar/Pasar solo visible cuando es turno humano
+        if self.state.current_player not in self.agents:
+            self._btn_draw.update(mp)
+            self._btn_draw.draw(self.screen)
+            self._btn_draw.update(mp)
+            self._btn_draw.draw(self.screen)
 
     # ── Overlay de fin de partida ──────────────────────────────────────── #
 
@@ -959,7 +992,7 @@ class GameScreen:
         elif self.mode == "human_vs_ai" and winner not in self.agents:
             txt, col = "!!! GANASTE !!!", C_WIN
         elif self.mode == "human_vs_ai":
-            txt, col = "LA IA GANA", C_LOSE
+            txt, col = "IA GANA", C_LOSE
         else:
             txt = f"GANA JUGADOR {winner + 1}"
             col = C_P0 if winner == 0 else C_P1
